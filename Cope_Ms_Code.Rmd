@@ -1,0 +1,708 @@
+---
+title: "Untitled"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+Load in data and libraries
+```{r}
+CopeData <- read.csv(url("https://raw.githubusercontent.com/marisolgr/NEP_Copepods_ThermalPatterns/main/Ashlock_Copepod_data_29Jan2021.csv"))
+CopeData
+
+library(lme4)
+library(lmtest)
+library(MASS)
+library(fmsb)
+library(faraway)
+library(rsq)
+library(tidyverse)
+```
+
+Set Region as factor
+```{r}
+head(CopeData)
+str(CopeData)
+CopeData$region <- as.factor(CopeData$region)
+str(CopeData)
+```
+
+Add presence absence columns
+```{r}
+CopeData$paCalanus <- ifelse(CopeData$Calanus.pacificus >0, 1, 0)
+
+CopeData$paOithona <- ifelse(CopeData$Oithona.spp. >0, 1, 0)
+
+CopeData$paNeocalanus <- ifelse(CopeData$Neocalanus.plumchrus.V >0, 1, 0)
+
+head(CopeData)
+```
+
+```{r}
+CopeData<- CopeData[complete.cases(CopeData), ]
+str(CopeData$paNeocalanus)
+str(CopeData$paOithona)
+str(CopeData$paCalanus)
+head(CopeData)
+tail(CopeData)
+```
+
+Create MonthDay column
+```{r}
+CopeData$MonthDay <- CopeData$month+((CopeData$day)/30.5)
+```
+
+Rename date column
+```{r}
+colnames(CopeData)[colnames(CopeData)=="MonthDay"] <- "date"
+```
+
+
+Modify temperature to Celcius from Kelvin
+```{r}
+CopeData$analysed_sst_15dy <- CopeData$analysed_sst_15dy-273.15
+CopeData
+```
+
+Add Habitat column
+```{r}
+CopeData$Habitat <- ifelse(CopeData$depth >= -3000, "Shallow", "Deep")
+```
+
+
+**Calanus pacificus presence/absence model**
+
+Temp only
+```{r}
+CalTemp = glm(paCalanus~SST, family=binomial, data=CopeData)
+vif(CalTemp)
+summary(CalTemp)
+lrtest(CalTemp)
+rsq(CalTemp)
+```
+
+Date only
+```{r}
+CalDate = glm(paCalanus~date, family=binomial, data=CopeData)
+vif(CalDate)
+summary(CalDate)
+lrtest(CalDate)
+rsq(CalDate)
+```
+
+Depth only
+```{r}
+CalDepth = glm(paCalanus~Habitat, family=binomial, data=CopeData)
+vif(CalDepth)
+summary(CalDepth)
+lrtest(CalDepth)
+rsq(CalDepth)
+```
+
+Set Region 4 as the reference region
+```{r}
+leveldata <- within(CopeData, region <- relevel(region, ref = 4))
+```
+
+region only
+```{r}
+Calregion = glm(paCalanus~region, family=binomial, data=leveldata)
+vif(Calregion)
+summary(Calregion)
+lrtest(Calregion)
+rsq(Calregion)
+```
+
+Temp and date
+```{r}
+CalTempDate = glm(paCalanus~SST+date, family=binomial, data=CopeData)
+vif(CalTempDate)
+summary(CalTempDate)
+lrtest(CalTemp,CalTempDate)
+rsq(CalTempDate)
+```
+
+Temperature, date, and depth
+```{r}
+CalTempDateDepth = glm(paCalanus~SST+date+Habitat, family=binomial, data=CopeData)
+summary(CalTempDateDepth)
+vif(CalTempDateDepth)
+lrtest(CalTempDate,CalTempDateDepth)
+rsq(CalTempDateDepth)
+```
+
+Temperature, date, and region
+```{r}
+CalTempDateregion = glm(paCalanus~SST+date+region, family=binomial, data=leveldata)
+vif(CalTempDateregion)
+summary(CalTempDateregion)
+lrtest(CalTempDateDepth,CalTempDateregion)
+rsq(CalTempDateregion)
+```
+
+Temperature and depth
+```{r}
+CalTempDepth = glm(paCalanus~SST+Habitat, family=binomial, data=leveldata)
+vif(CalTempDepth)
+summary(CalTempDepth)
+lrtest(CalTemp,CalTempDepth)
+lrtest(CalTempDateregion,CalTempDepth)
+#This is the stat I'm reporting^
+rsq(CalTempDepth)
+```
+
+Temperature and region
+```{r}
+CalTempRegion = glm(paCalanus~SST+region, family=binomial, data=leveldata)
+vif(CalTempRegion)
+summary(CalTempRegion)
+lrtest(CalTempDepth,CalTempRegion)
+rsq(CalTempRegion)
+```
+
+Temperature, depth, and interactions
+```{r}
+CalInteractions = glm(paCalanus~SST*Habitat, family=binomial, data=leveldata)
+vif(CalInteractions)
+summary(CalInteractions)
+lrtest(CalTempDepth,CalInteractions)
+rsq(CalInteractions)
+```
+
+Calanus pacificus linear model
+```{r}
+CalPacDF<- CopeData %>% select(c("SST", "Calanus.pacificus","date","Habitat","region"))
+```
+
+Remove rows with zeros
+```{r}
+CalPacDF <- CalPacDF[CalPacDF$Calanus.pacificus != 0, ]
+head(CalPacDF)
+str(CalPacDF)
+```
+
+Transform count data
+```{r}
+CalPacDF$Calanus <- log(CalPacDF$Calanus.pacificus)
+str(CalPacDF)
+```
+
+Temp only
+```{r}
+CalTemplm = lm(Calanus~SST, data=CalPacDF)
+vif(CalTemplm)
+summary(CalTemplm)
+AIC(CalTemplm)
+lrtest(CalTemplm)
+```
+
+Date only
+```{r}
+CalDatelm = lm(Calanus~date, data=CalPacDF)
+vif(CalDatelm)
+summary(CalDatelm)
+AIC(CalDatelm)
+lrtest(CalDatelm)
+```
+
+Depth
+```{r}
+CalDepthlm = lm(Calanus~Habitat, data=CalPacDF)
+vif(CalDepthlm)
+summary(CalDepthlm)
+AIC(CalDepthlm)
+lrtest(CalDepthlm)
+```
+
+Set Region 4 as the reference region
+```{r}
+levelCalPacDF <- within(CalPacDF, region <- relevel(region, ref = 4))
+```
+
+Region
+```{r}
+Calregionlm = lm(Calanus~region, data=levelCalPacDF)
+vif(Calregionlm)
+summary(Calregionlm)
+AIC(Calregionlm)
+lrtest(CalDepthlm,Calregionlm)
+```
+
+Temp and date
+```{r}
+CalTempDatelm = lm(Calanus~date+SST, data=CalPacDF)
+vif(CalTempDatelm)
+summary(CalTempDatelm)
+AIC(CalTempDatelm)
+lrtest(CalTemplm,CalTempDatelm)
+lrtest(CalDatelm,CalTempDatelm)
+#report this one in chart
+```
+
+Temp, date, and depth
+```{r}
+CalTempDateDepthlm = lm(Calanus~date+SST+Habitat, data=CalPacDF)
+summary(CalTempDateDepthlm)
+vif(CalTempDateDepthlm)
+AIC(CalTempDateDepthlm)
+lrtest(CalTempDatelm,CalTempDateDepthlm)
+```
+
+Temp, date, and region
+```{r}
+CalTempDateregionlm = lm(Calanus~SST+date+region, data=levelCalPacDF)
+vif(CalTempDateregionlm)
+summary(CalTempDateregionlm)
+confint(CalTempDateregionlm)
+AIC(CalTempDateregionlm)
+lrtest(CalTempDateDepthlm,CalTempDateregionlm)
+```
+
+Oithona spp. presence/absence models
+
+Temp only
+```{r}
+OiTemp = glm(paOithona~SST, family=binomial, data=CopeData)
+vif(OiTemp)
+summary(OiTemp)
+lrtest(OiTemp)
+rsq(OiTemp)
+```
+
+Date only
+```{r}
+OiDate = glm(paOithona~date, family=binomial, data=CopeData)
+summary(OiDate)
+vif(OiDate)
+lrtest(OiDate)
+rsq(OiDate)
+```
+
+Depth only
+```{r}
+OiDepth = glm(paOithona~Habitat, family=binomial, data=CopeData)
+vif(OiDepth)
+summary(OiDepth)
+lrtest(OiDepth)
+rsq(OiDepth)
+```
+
+Set Region 4 as the reference region
+```{r}
+levelOi <- within(CopeData, region <- relevel(region, ref = 4))
+```
+
+region only
+```{r}
+Oiregion = glm(paOithona~region, family=binomial, data=levelOi)
+vif(Oiregion)
+summary(Oiregion)
+lrtest(OiDepth, Oiregion)
+rsq(Oiregion)
+```
+
+Temp and date
+```{r}
+OiTempDate = glm(paOithona~date+SST, family=binomial, data=CopeData)
+summary(OiTempDate)
+vif(OiTempDate)
+lrtest(OiTemp,OiTempDate)
+rsq(OiTempDate)
+```
+
+Temp, date, and depth
+```{r}
+OiTempDateDepth = glm(paOithona~date+SST+Habitat, family=binomial, data=CopeData)
+summary(OiTempDateDepth)
+vif(OiTempDateDepth)
+lrtest(OiTempDate,OiTempDateDepth)
+rsq(OiTempDateDepth)
+```
+
+Temp, date, and region
+```{r}
+OiTempDateregion = glm(paOithona~SST+date+region, family=binomial, data=leveldata)
+vif(OiTempDateregion)
+summary(OiTempDateregion)
+lrtest(OiTempDateDepth,OiTempDateregion)
+rsq(OiTempDateregion)
+```
+
+Temp and depth
+```{r}
+OiTempDepth = glm(paOithona~SST+Habitat, family=binomial, data=CopeData)
+summary(OiTempDepth)
+vif(OiTempDepth)
+lrtest(OiTemp,OiTempDepth)
+rsq(OiTempDepth)
+```
+
+Temp and region
+```{r}
+OiTempRegion = glm(paOithona~SST+region, family=binomial, data=levelOi)
+summary(OiTempRegion)
+vif(OiTempRegion)
+lrtest(OiTempDepth,OiTempRegion)
+rsq(OiTempRegion)
+```
+
+Temp and depth and interactions
+```{r}
+OiInteractions = glm(paOithona~SST*Habitat, family=binomial, data=CopeData)
+summary(OiInteractions)
+vif(OiInteractions)
+lrtest(OiTempDepth,OiInteractions)
+rsq(OiInteractions)
+```
+
+Oithona spp. linear model 
+
+```{r}
+OithonaDF<- CopeData %>% select(c("SST", "Oithona.spp.","date","Habitat", "region"))
+
+```
+
+Remove rows with zeros
+```{r}
+OithonaDF <- OithonaDF[OithonaDF$Oithona.spp. != 0, ]
+head(OithonaDF)
+str(OithonaDF)
+```
+
+Transform count data
+```{r}
+OithonaDF$Oithona <- log(OithonaDF$Oithona.spp.)
+str(OithonaDF)
+```
+
+Temp
+```{r}
+OiTemplm = lm(Oithona~SST, data=OithonaDF)
+vif(OiTemplm)
+summary(OiTemplm)
+AIC(OiTemplm)
+lrtest(OiTemplm)
+```
+
+Date only
+```{r}
+OiDatelm = lm(Oithona~date, data=OithonaDF)
+summary(OiDatelm)
+vif(OiDatelm)
+AIC(OiDatelm)
+lrtest(OiDatelm)
+```
+
+Depth
+```{r}
+OiDepthlm = lm(Oithona~Habitat, data=OithonaDF)
+vif(OiDepthlm)
+summary(OiDepthlm)
+AIC(OiDepthlm)
+lrtest(OiDepthlm)
+```
+
+Set Region 4 as the reference region
+```{r}
+OithonaLevelDF <- within(OithonaDF, region <- relevel(region, ref = 4))
+```
+
+Region
+```{r}
+Oiregionlm = lm(Oithona~region, data=OithonaLevelDF)
+vif(Oiregionlm)
+summary(Oiregionlm)
+AIC(Oiregionlm)
+lrtest(Oiregionlm)
+```
+
+Temp and date
+```{r}
+OiTempDatelm = lm(Oithona~date+SST, data=OithonaDF)
+summary(OiTempDatelm)
+vif(OiTempDatelm)
+AIC(OiTempDatelm)
+lrtest(OiTemplm,OiTempDatelm)
+```
+
+
+Temp, date, and depth
+```{r}
+OiTempDateDepthlm = lm(Oithona~date+SST+Habitat, data=OithonaDF)
+summary(OiTempDateDepthlm)
+vif(OiTempDateDepthlm)
+AIC(OiTempDateDepthlm)
+lrtest(OiTempDatelm,OiTempDateDepthlm)
+```
+
+Temp, date, and region
+```{r}
+OiTempDateregionlm = lm(Oithona~SST+date+region, data=OithonaLevelDF)
+vif(OiTempDateregionlm)
+summary(OiTempDateregionlm)
+AIC(OiTempDateregionlm)
+lrtest(OiTempDateDepthlm,OiTempDateregionlm)
+```
+
+
+N. plumchrus presence/absence model
+
+Temp only
+```{r}
+NeoTemp = glm(paNeocalanus~SST, family=binomial, data=CopeData)
+vif(NeoTemp)
+summary(NeoTemp)
+lrtest(NeoTemp)
+rsq(NeoTemp)
+```
+
+Date
+```{r}
+NeoDate = glm(paNeocalanus~date, family=binomial, data=CopeData)
+summary(NeoDate)
+vif(NeoDate)
+lrtest(NeoDate)
+rsq(NeoDate)
+```
+
+Depth
+```{r}
+NeoDepth = glm(paNeocalanus~Habitat, family=binomial, data=CopeData)
+vif(NeoDepth)
+summary(NeoDepth)
+lrtest(NeoDepth)
+rsq(NeoDepth)
+```
+
+region
+```{r}
+Neoregion = glm(paNeocalanus~region, family=binomial, data=CopeData)
+vif(Neoregion)
+summary(Neoregion)
+lrtest(NeoDepth, Neoregion)
+rsq(Neoregion)
+```
+
+Temp and date
+```{r}
+NeoTempDate = glm(paNeocalanus~date+SST, family=binomial, data=CopeData)
+vif(NeoTempDate)
+summary(NeoTempDate)
+lrtest(NeoTemp,NeoTempDate)
+rsq(NeoTempDate)
+```
+
+
+Temp, date, and depth
+```{r}
+NeoTempDateDepth = glm(paNeocalanus~date+SST+Habitat, family=binomial, data=CopeData)
+vif(NeoTempDateDepth)
+summary(NeoTempDateDepth)
+lrtest(NeoTempDate,NeoTempDateDepth)
+rsq(NeoTempDateDepth)
+```
+
+
+Temp, date, and region
+```{r}
+NeoTempDateregion = glm(paNeocalanus~SST+date+region, family=binomial, data=leveldata)
+vif(NeoTempDateregion)
+summary(NeoTempDateregion)
+lrtest(NeoTempDateDepth,NeoTempDateregion)
+rsq(NeoTempDateregion)
+```
+
+Temp, date, depth, and interactions
+```{r}
+NeoInteractions = glm(paNeocalanus~date+SST+Habitat+date*SST+date*Habitat+SST*Habitat, family=binomial, data=CopeData)
+vif(NeoInteractions)
+summary(NeoInteractions)
+lrtest(NeoTempDateDepth,NeoInteractions)
+rsq(NeoInteractions)
+```
+
+
+N. plumchrus linear model
+```{r}
+NeoDF<- CopeData %>% select(c("SST", "Neocalanus.plumchrus.V","date","Habitat","region"))
+
+```
+
+Remove rows with zeros
+```{r}
+NeoDF <- NeoDF[NeoDF$Neocalanus.plumchrus.V != 0, ]
+head(NeoDF)
+str(NeoDF)
+```
+
+Transform count data
+```{r}
+NeoDF$Neocalanus <- log(NeoDF$Neocalanus.plumchrus.V)
+str(NeoDF)
+```
+
+Temp
+```{r}
+NeoTemplm = lm(Neocalanus~SST, data=NeoDF)
+vif(NeoTemplm)
+summary(NeoTemplm)
+AIC(NeoTemplm)
+lrtest(NeoTemplm)
+```
+
+Date only
+```{r}
+NeoDatelm = lm(Neocalanus~date, data=NeoDF)
+vif(NeoDatelm)
+summary(NeoDatelm)
+AIC(NeoDatelm)
+lrtest(NeoDatelm)
+```
+
+Depth
+```{r}
+NeoDepthlm = lm(Neocalanus~Habitat, data=NeoDF)
+vif(NeoDepthlm)
+summary(NeoDepthlm)
+AIC(NeoDepthlm)
+lrtest(NeoDepthlm)
+```
+
+Set Region 4 as the reference region
+```{r}
+NeoLevelDF <- within(NeoDF, region <- relevel(region, ref = 4))
+```
+
+region
+```{r}
+Neoregionlm = lm(Neocalanus~region, data=NeoLevelDF)
+vif(Neoregionlm)
+summary(Neoregionlm)
+AIC(Neoregionlm)
+lrtest(NeoDepthlm,Neoregionlm)
+```
+
+Temp and date
+```{r}
+NeoTempDatelm = lm(Neocalanus~date+SST, data=NeoDF)
+vif(NeoTempDatelm)
+summary(NeoTempDatelm)
+AIC(NeoTempDatelm)
+lrtest(NeoTemplm,NeoTempDatelm)
+```
+
+
+Temp, date, and depth
+```{r}
+NeoTempDateDepthlm = lm(Neocalanus~date+SST+Habitat, data=NeoDF)
+vif(NeoTempDateDepthlm)
+summary(NeoTempDateDepthlm)
+AIC(NeoTempDateDepthlm)
+lrtest(NeoTempDatelm,NeoTempDateDepthlm)
+```
+
+Temp, date, and region
+```{r}
+NeoTempDateregionlm = lm(Neocalanus~SST+date+region, data=NeoLevelDF)
+vif(NeoTempDateregionlm)
+summary(NeoTempDateregionlm)
+AIC(NeoTempDateregionlm)
+lrtest(NeoTempDateDepthlm,NeoTempDateregionlm)
+```
+
+
+Load in data and libraries for biomass peak analysis
+
+HADLEY SST - Mean annual temp (March-May) for each year
+```{r}
+BmpData <- read.table("~/Desktop/gradschool/Internship/BiomassPeak.csv", header=TRUE, 
+  	sep=",")
+head(BmpData)
+tail(BmpData)
+
+TempData <- read.table("~/Desktop/gradschool/Internship/HadSST.csv", header=TRUE, 
+  	sep=",")
+head(TempData)
+tail(TempData)
+library(dplyr)
+library(ggplot2)
+```
+
+Data from March-May
+```{r}
+Spring <- TempData[which(TempData$Month > 2 & TempData$Month < 6),]
+str(Spring)
+tail(Spring)
+```
+
+Spring avg
+```{r}
+Spring %>% 
+group_by(Year) %>%
+summarise(avg = mean(SST))
+
+SpringAnnAvg <- c(6.78,6.88,6.75,7.61,7.58,8.01,6.86,6.56,6.1,6.57,7.18,6.68,6.27,6.98,8.11,8.87,8.43,7.33,7.39)
+
+SpringLagAnnAvg <- c(6.57,6.78,6.88,6.75,7.61,7.58,8.01,6.86,6.56,6.1,6.57,7.18,6.68,6.27,6.98,8.11,8.87,8.43,7.33)
+
+FinalData <- cbind(BmpData,SpringAnnAvg)
+head(FinalData)
+FinalLagData <- cbind(BmpData,SpringLagAnnAvg)
+head(FinalLagData)
+```
+
+```{r}
+AnnWidthlm <- lm(CohortWidth~SpringAnnAvg, data=FinalData)
+summary(AnnWidthlm)
+
+AnnMidlm <- lm(Midpoint~SpringAnnAvg, data=FinalData)
+summary(AnnMidlm)
+```
+No significant effect of temp on width (p=0.785), but significant effect of temp on midpoint (p=0.017)
+
+Would like to plot to see what this looks like
+```{r}
+ggplot(FinalData, aes(SpringAnnAvg)) + 
+  geom_line(aes(y = CohortWidth, colour = "CohortWidth")) + 
+  geom_line(aes(y = Midpoint, colour = "Midpoint"))
+```
+
+
+Looking back at Batten and Mackas 2009 they used a one year lag - try this
+```{r}
+LagWidthlm <- lm(CohortWidth~SpringLagAnnAvg, data=FinalLagData)
+summary(LagWidthlm)
+
+LagMidlm <- lm(Midpoint~SpringLagAnnAvg, data=FinalLagData)
+summary(LagMidlm)
+```
+no significance for lag ann avg and width p=0.24, but significance for midpoint p=0.005
+
+Plot data
+```{r}
+ FinalPlot<- (ggplot(FinalLagData, aes(SpringLagAnnAvg)) + 
+   geom_point(aes(y = CohortWidth, colour = "dodgerblue")) + 
+    geom_point(aes(y = Midpoint, colour = "red"))+ theme(plot.title = element_text(hjust = 0.5), text = element_text(size=20))) +theme_classic()
+print(FinalPlot + labs(title= "Influence of SST on Biomass Peak",
+                      y="", x = "Avg SST _ One Year Lag (°C)"))
+```
+
+
+```{r}
+p <- ggplot(FinalLagData, aes(x = SpringLagAnnAvg))
+  p <- p + geom_point(aes(y = Midpoint, colour = "Midpoint"),size=3)
+  
+  p <- p + geom_point(aes(y = CohortWidth, colour = "Cohort Width"),size=3)
+  
+  # modifying colours and theme options
+  p <- p + scale_colour_manual(values = c("blue", "red"))
+  p <- p + labs(y = " ",
+                x = "One Year Lag SST (°C)",
+                colour = "Parameter")
+  p <- p + theme(legend.position = c(0.8, 0.9)) + labs(title= "Influence of SST on Biomass Peak") 
+
+p <- p+ theme_bw(base_size=25) +theme(plot.title = element_text(hjust = 0.5))
+
+p
+```
+
