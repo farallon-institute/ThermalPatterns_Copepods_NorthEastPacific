@@ -1,0 +1,493 @@
+---
+title: "Copepod_Ms_Code"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+Load in data and libraries
+```{r}
+CopeData <- read.csv(url("https://raw.githubusercontent.com/marisolgr/NEP_Copepods_ThermalPatterns/main/Ashlock_Copepod_data_29Jan2021.csv"))
+CopeData
+
+library(lme4)
+library(lmtest)
+library(MASS)
+library(fmsb)
+library(faraway)
+library(rsq)
+library(tidyverse)
+```
+
+Set Region as factor
+```{r}
+head(CopeData)
+str(CopeData)
+CopeData$region <- as.factor(CopeData$region)
+str(CopeData)
+```
+
+Add presence absence columns
+```{r}
+CopeData$paCalanus <- ifelse(CopeData$Calanus.pacificus >0, 1, 0)
+
+CopeData$paOithona <- ifelse(CopeData$Oithona.spp. >0, 1, 0)
+
+CopeData$paNeocalanus <- ifelse(CopeData$Neocalanus.plumchrus.V >0, 1, 0)
+
+head(CopeData)
+```
+
+```{r}
+CopeData<- CopeData[complete.cases(CopeData), ]
+str(CopeData$paNeocalanus)
+str(CopeData$paOithona)
+str(CopeData$paCalanus)
+head(CopeData)
+tail(CopeData)
+```
+
+Create MonthDay column
+```{r}
+CopeData$MonthDay <- CopeData$month+((CopeData$day)/30.5)
+```
+
+Rename date column
+```{r}
+colnames(CopeData)[colnames(CopeData)=="MonthDay"] <- "date"
+```
+
+
+Modify temperature to Celcius from Kelvin
+```{r}
+CopeData$analysed_sst_15dy <- CopeData$analysed_sst_15dy-273.15
+CopeData
+```
+
+Add Habitat column
+```{r}
+CopeData$Habitat <- ifelse(CopeData$depth >= -3000, "Shallow", "Deep")
+```
+
+Calanus pacificus linear model
+```{r}
+CalPacDF<- CopeData %>% select(c("SST", "Calanus.pacificus","date","Habitat","region"))
+
+```
+
+Looking at range of occurrence temps
+```{r}
+CalPacDFNoZero <- CalPacDF[CalPacDF$Calanus.pacificus != 0, ]
+
+max(CalPacDFNoZero$SST)
+#16.06244
+min(CalPacDFNoZero$SST)
+#3.517956
+```
+
+
+Transform count data
+```{r}
+CalPacDF$Calanus <- log10(CalPacDF$Calanus.pacificus+1)
+str(CalPacDF)
+CalPacDF
+```
+
+Temp only
+```{r}
+CalTemplm = lm(Calanus~SST, data=CalPacDF)
+vif(CalTemplm)
+summary(CalTemplm)
+AIC(CalTemplm)
+lrtest(CalTemplm)
+```
+
+Date only
+```{r}
+CalDatelm = lm(Calanus~date, data=CalPacDF)
+vif(CalDatelm)
+summary(CalDatelm)
+AIC(CalDatelm)
+lrtest(CalDatelm)
+```
+
+Depth
+```{r}
+CalDepthlm = lm(Calanus~Habitat, data=CalPacDF)
+vif(CalDepthlm)
+summary(CalDepthlm)
+AIC(CalDepthlm)
+lrtest(CalDepthlm)
+```
+
+Set Region 4 as the reference region
+```{r}
+levelCalPacDF <- within(CalPacDF, region <- relevel(region, ref = 4))
+```
+
+Region
+```{r}
+Calregionlm = lm(Calanus~region, data=levelCalPacDF)
+vif(Calregionlm)
+summary(Calregionlm)
+AIC(Calregionlm)
+lrtest(CalDepthlm,Calregionlm)
+```
+
+Temp and date
+```{r}
+CalTempDatelm = lm(Calanus~date+SST, data=CalPacDF)
+vif(CalTempDatelm)
+summary(CalTempDatelm)
+AIC(CalTempDatelm)
+lrtest(CalTemplm,CalTempDatelm)
+lrtest(CalDatelm,CalTempDatelm)
+#report this one in chart
+```
+
+Temp, date, and depth
+```{r}
+CalTempDateDepthlm = lm(Calanus~date+SST+Habitat, data=CalPacDF)
+summary(CalTempDateDepthlm)
+vif(CalTempDateDepthlm)
+AIC(CalTempDateDepthlm)
+lrtest(CalTempDatelm,CalTempDateDepthlm)
+```
+
+Temp, date, and region
+```{r}
+CalTempDateregionlm = lm(Calanus~SST+date+region, data=levelCalPacDF)
+vif(CalTempDateregionlm)
+summary(CalTempDateregionlm)
+AIC(CalTempDateregionlm)
+lrtest(CalTempDateDepthlm,CalTempDateregionlm)
+```
+
+Temp and Depth
+```{r}
+CalTempDepthlm = lm(Calanus~SST+Habitat, data=CalPacDF)
+summary(CalTempDepthlm)
+vif(CalTempDepthlm)
+AIC(CalTempDepthlm)
+lrtest(CalTemplm,CalTempDepthlm)
+#22.855
+lrtest(CalDepthlm,CalTempDepthlm)
+#39.338
+```
+
+Set Region 4 as the reference region
+```{r}
+levelCalPacDF <- within(CalPacDF, region <- relevel(region, ref = 4))
+```
+Temp and Region
+```{r}
+CalTempRegionlm = lm(Calanus~SST+region, data=CalPacDF)
+summary(CalTempRegionlm)
+vif(CalTempRegionlm)
+AIC(CalTempRegionlm)
+lrtest(CalTempDepthlm,CalTempRegionlm)
+plot(CalTempRegionlm)
+```
+
+
+Oithona spp. linear model 
+
+```{r}
+OithonaDF<- CopeData %>% select(c("SST", "Oithona.spp.","date","Habitat", "region"))
+
+```
+
+```{r}
+OithinaDFNoZero <- OithonaDF[OithonaDF$Oithona.spp. != 0, ]
+
+max(OithinaDFNoZero$SST)
+#15.75873
+min(OithinaDFNoZero$SST)
+#3.304963
+```
+
+Transform count data
+```{r}
+OithonaDF$Oithona <- log10(OithonaDF$Oithona.spp.+1)
+str(OithonaDF)
+OithonaDF
+```
+
+Temp
+```{r}
+OiTemplm = lm(Oithona~SST, data=OithonaDF)
+vif(OiTemplm)
+summary(OiTemplm)
+AIC(OiTemplm)
+lrtest(OiTemplm)
+```
+
+Date only
+```{r}
+OiDatelm = lm(Oithona~date, data=OithonaDF)
+summary(OiDatelm)
+vif(OiDatelm)
+AIC(OiDatelm)
+lrtest(OiDatelm)
+```
+
+Depth
+```{r}
+OiDepthlm = lm(Oithona~Habitat, data=OithonaDF)
+vif(OiDepthlm)
+summary(OiDepthlm)
+AIC(OiDepthlm)
+lrtest(OiDepthlm)
+```
+
+Set Region 4 as the reference region
+```{r}
+OithonaLevelDF <- within(OithonaDF, region <- relevel(region, ref = 4))
+```
+
+Region
+```{r}
+Oiregionlm = lm(Oithona~region, data=OithonaLevelDF)
+vif(Oiregionlm)
+summary(Oiregionlm)
+AIC(Oiregionlm)
+lrtest(Oiregionlm)
+```
+
+Temp and date
+```{r}
+OiTempDatelm = lm(Oithona~date+SST, data=OithonaDF)
+summary(OiTempDatelm)
+vif(OiTempDatelm)
+AIC(OiTempDatelm)
+lrtest(OiTemplm,OiTempDatelm)
+```
+
+
+Temp, date, and depth
+```{r}
+OiTempDateDepthlm = lm(Oithona~date+SST+Habitat, data=OithonaDF)
+summary(OiTempDateDepthlm)
+vif(OiTempDateDepthlm)
+AIC(OiTempDateDepthlm)
+lrtest(OiTempDatelm,OiTempDateDepthlm)
+```
+
+Temp, date, and region
+```{r}
+OiTempDateregionlm = lm(Oithona~SST+date+region, data=OithonaLevelDF)
+vif(OiTempDateregionlm)
+summary(OiTempDateregionlm)
+AIC(OiTempDateregionlm)
+lrtest(OiTempDateDepthlm,OiTempDateregionlm)
+```
+
+
+Temp and region
+```{r}
+OiTempRegionlm = lm(Oithona~SST+region, data=OithonaLevelDF)
+vif(OiTempRegionlm)
+summary(OiTempRegionlm)
+AIC(OiTempRegionlm)
+lrtest(OiTemplm,OiTempRegionlm)
+#12.588
+lrtest(Oiregionlm,OiTempRegionlm)
+#5.8846
+lrtest(OiTempDateregionlm,OiTempRegionlm)
+#2.2505
+plot(OiTempRegionlm)
+
+```
+
+
+N. plumchrus linear model
+```{r}
+NeoDF<- CopeData %>% select(c("SST", "Neocalanus.plumchrus.V","date","Habitat","region"))
+
+```
+
+```{r}
+NeoDFNoZero <- NeoDF[NeoDF$Neocalanus.plumchrus.V != 0, ]
+
+max(NeoDFNoZero$SST)
+#14.35687
+min(NeoDFNoZero$SST)
+#3.213618
+```
+
+
+
+Transform count data
+```{r}
+NeoDF$Neocalanus <- log10(NeoDF$Neocalanus.plumchrus.V+1)
+str(NeoDF)
+NeoDF
+```
+
+Temp
+```{r}
+NeoTemplm = lm(Neocalanus~SST, data=NeoDF)
+vif(NeoTemplm)
+summary(NeoTemplm)
+AIC(NeoTemplm)
+lrtest(NeoTemplm)
+```
+
+Date only
+```{r}
+NeoDatelm = lm(Neocalanus~date, data=NeoDF)
+vif(NeoDatelm)
+summary(NeoDatelm)
+AIC(NeoDatelm)
+lrtest(NeoDatelm)
+```
+
+Depth
+```{r}
+NeoDepthlm = lm(Neocalanus~Habitat, data=NeoDF)
+vif(NeoDepthlm)
+summary(NeoDepthlm)
+AIC(NeoDepthlm)
+lrtest(NeoDepthlm)
+```
+
+Set Region 4 as the reference region
+```{r}
+NeoLevelDF <- within(NeoDF, region <- relevel(region, ref = 4))
+```
+
+region
+```{r}
+Neoregionlm = lm(Neocalanus~region, data=NeoLevelDF)
+vif(Neoregionlm)
+summary(Neoregionlm)
+AIC(Neoregionlm)
+lrtest(NeoDepthlm,Neoregionlm)
+```
+
+Temp and date
+```{r}
+NeoTempDatelm = lm(Neocalanus~date+SST, data=NeoDF)
+vif(NeoTempDatelm)
+summary(NeoTempDatelm)
+AIC(NeoTempDatelm)
+lrtest(NeoTemplm,NeoTempDatelm)
+lrtest(NeoDatelm,NeoTempDatelm)
+```
+
+
+Temp, date, and depth
+```{r}
+NeoTempDateDepthlm = lm(Neocalanus~date+SST+Habitat, data=NeoDF)
+plot(NeoTempDateDepthlm)
+vif(NeoTempDateDepthlm)
+summary(NeoTempDateDepthlm)
+AIC(NeoTempDateDepthlm)
+lrtest(NeoTempDatelm,NeoTempDateDepthlm)
+```
+
+Temp, date, and region
+```{r}
+NeoTempDateregionlm = lm(Neocalanus~SST+date+region, data=NeoLevelDF)
+vif(NeoTempDateregionlm)
+summary(NeoTempDateregionlm)
+AIC(NeoTempDateregionlm)
+lrtest(NeoTempDateDepthlm,NeoTempDateregionlm)
+```
+
+
+Load in data and libraries for biomass peak analysis
+
+HADLEY SST - Mean annual temp for each year
+```{r}
+BmpData <- read.csv(url("https://raw.githubusercontent.com/marisolgr/NEP_Copepods_ThermalPatterns/main/BiomassPeak.csv"))
+
+head(BmpData)
+tail(BmpData)
+
+TempData <- read.csv(url("https://raw.githubusercontent.com/marisolgr/NEP_Copepods_ThermalPatterns/main/HadSST.csv"))
+head(TempData)
+tail(TempData)
+library(dplyr)
+library(ggplot2)
+```
+
+Annual avg
+```{r}
+TempData
+library(dplyr)
+
+tapply(TempData$SST, TempData$Year, mean)
+
+AnnAvg <- c(9.43,9.1,9.86,10,10.1,10.3,9.5,9.12,8.68,9.18,9.43,9.07,8.91,9.84,10.8,11.1,10.7,9.81,10.4)
+
+LagAnnAvg <- c(8.95,9.43,9.1,9.86,10,10.1,10.3,9.5,9.12,8.68,9.18,9.43,9.07,8.91,9.84,10.8,11.1,10.7,9.81)
+
+AnnAvgData <- cbind(BmpData,AnnAvg)
+head(AnnAvgData)
+AnnAvgLagData <- cbind(BmpData,LagAnnAvg)
+head(AnnAvgLagData)
+```
+
+```{r}
+AnnWidthlm <- lm(CohortWidth~AnnAvg, data=AnnAvgData)
+summary(AnnWidthlm)
+
+AnnMidlm <- lm(Midpoint~AnnAvg, data=AnnAvgData)
+summary(AnnMidlm)
+```
+No significant effect of temp on width (p=0.452), but significant effect of temp on midpoint (p=0.019)
+
+
+Looking back at Batten and Mackas 2009 they used a one year lag - try this
+```{r}
+LagWidthlm <- lm(CohortWidth~LagAnnAvg, data=AnnAvgLagData)
+summary(LagWidthlm)
+
+LagMidlm <- lm(Midpoint~LagAnnAvg, data=AnnAvgLagData)
+summary(LagMidlm)
+```
+no significance for lag ann avg and width p=0.20, but significance for midpoint p=0.006
+
+
+Plot data
+```{r}
+library(gridExtra)
+plot1 <- ggplot(AnnAvgLagData, aes(x = LagAnnAvg))
+  plot2 <- plot1 + geom_point(aes(y = Midpoint),size=3) + labs (y="Midpoint \n (day of year)", x="Annual Average SST - One Year Lag (°C)", tag="B")+ theme_bw(base_size=15)
+  
+  # adding the relative humidity data, transformed to match roughly the range of the temperature
+  plot3 <- plot1 + geom_point(aes(y = CohortWidth),size=3) + labs (y="Cohort Width \n (days)", x="Annual Average SST - One Year Lag (°C)", tag="A")+ theme_bw(base_size=15)
+  
+  grid.arrange(plot3, plot2, nrow = 2)
+```
+
+
+Looking at plumchrus abundance for blob years
+```{r}
+mhwNeoDF<- CopeData %>% select(c("SST", "Neocalanus.plumchrus.V","date","Habitat","region","year"))
+tail(mhwNeoDF) 
+mhwNeoDF$MHW <- ifelse(mhwNeoDF$year >= 2014, "MHW", "Amb")
+write.csv(mhwNeoDF,"~/Desktop/gradschool/Internship/Practice", row.names = FALSE)
+mhwNeoDF$Neocalanus <- log10(mhwNeoDF$Neocalanus.plumchrus.V+1)
+aovmod <- aov(Neocalanus~MHW, mhwNeoDF)
+summary(aovmod)
+TukeyHSD(aovmod)
+```
+
+Let's try plotting our results and see what they look like
+```{r}
+PlotNeoDF<- mhwNeoDF %>% select(c("Neocalanus.plumchrus.V", "MHW"))
+PlotNeoDF
+ggplot(PlotNeoDF,aes(x=MHW,y=Neocalanus.plumchrus.V))+ 
+  geom_boxplot(color="black")+xlab("Marine Heat Wave")+labs(y=expression(paste(italic("N. plumchrus")," Abundance")))
+```
+
+Try plotting as violin plot
+```{r}
+library(sinaplot)
+PlotNeoDF
+ggplot(PlotNeoDF, aes(MHW, Neocalanus.plumchrus.V)) +
+  geom_violin(aes(fill=MHW))+scale_fill_manual(values=c("dodgerblue4","red4") ) +xlab("Marine Heat Wave")+labs(y=expression(paste(italic("N. plumchrus")," Abundance")))
+```
+
+
