@@ -450,15 +450,25 @@ no significance for lag ann avg and width p=0.20, but significance for midpoint 
 
 
 Plot data
+
+```{r}
+lb1 <- paste("R^2 == ", "0.33")
+lb2 <- paste("R^2 == ", "0.04")
+```
+
+
 ```{r}
 library(gridExtra)
+library(ggpmisc)
 plot1 <- ggplot(AnnAvgLagData, aes(x = LagAnnAvg))
-  plot2 <- plot1 + geom_point(aes(y = Midpoint),size=3) + labs (y="Midpoint \n (day of year)", x="Annual Average SST - One Year Lag (°C)", tag="B")+ theme_bw(base_size=15)
+  plot2 <- plot1 + geom_point(aes(y = Midpoint),size=3)+geom_smooth(method='lm', formula= y~x,  se=FALSE, color="black", aes(y = Midpoint))+   geom_text(x = 10, y = 155,
+            label = lb1, parse = TRUE) + labs (y="Midpoint \n (day of year)", x="Annual Average SST - One Year Lag (°C)", tag="A")+ theme_bw(base_size=15)
   
   # adding the relative humidity data, transformed to match roughly the range of the temperature
-  plot3 <- plot1 + geom_point(aes(y = CohortWidth),size=3) + labs (y="Cohort Width \n (days)", x="Annual Average SST - One Year Lag (°C)", tag="A")+ theme_bw(base_size=15)
+  plot3 <- plot1 + geom_point(aes(y = CohortWidth),size=3)+geom_smooth(method='lm', formula= y~x,  se=FALSE, color="black", aes(y = CohortWidth))+  geom_text(x = 10, y = 50,
+            label = lb2, parse = TRUE) + labs (y="Cohort Width \n (days)", x="Annual Average SST - One Year Lag (°C)", tag="B")+ theme_bw(base_size=15)
   
-  grid.arrange(plot3, plot2, nrow = 2)
+  grid.arrange(plot2, plot3, nrow = 2)
 ```
 
 
