@@ -1,6 +1,6 @@
 ### NEP_Copepods_ThermalPatterns
 ## Code for the manuscript: 
-# Manuscript: Ashlock et al. 2021. "Temperature and patterns of occurrence and abundance of key copepod in the NorthEast Pacific"
+# "Temperature and patterns of occurrence and abundance of key copepod in the NorthEast Pacific"
 ### by: <b>Lauren W. Ashlock</b>, Marisol García-Reyes, Chelle Gentemann, Sonia Batten, William J. Sydeman
 
 ***
